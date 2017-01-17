@@ -24,7 +24,7 @@ PLAYER_ID=$2
 generals-replay game \
   --input ./matches/$REPLAY_NAME \
   --output ./matches_json/${REPLAY_ID}_${PLAYER_ID}.json \
-  --player $PLAYER_ID --normalize 25
+  --player $PLAYER_ID
 
 if [ -n "$3" ]; then
   gifmaker ./matches/$REPLAY_NAME $PLAYER_ID

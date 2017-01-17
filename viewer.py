@@ -17,9 +17,9 @@ WHITE = (255,255,255)
 PLAYER_COLORS = [(0,128,0), (255,0,0), (255,165,0), (128,0,0), (128,0,128), (0,128,128), (0,70,0), (0,0,255)]
 
 # Table Properies
-CELL_WIDTH = 20
-CELL_HEIGHT = 20
-CELL_MARGIN = 5
+CELL_WIDTH = 25
+CELL_HEIGHT = 25
+CELL_MARGIN = 8
 
 class GeneralsViewer(object):
 	def __init__(self):
