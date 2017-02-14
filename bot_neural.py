@@ -21,7 +21,7 @@ MAP_SIZE = common.MAP_SIZE
 logging.basicConfig(level=logging.DEBUG)
 
 class GeneralsBot(object):
-	def __init__(self, start_game=False):
+	def __init__(self, start_game=True):
 		print "Building model..."
 		self.model = common.build_model()
 		self.graph = tensorflow.get_default_graph()
@@ -29,16 +29,18 @@ class GeneralsBot(object):
 		self.data_mtx = threading.Lock()
 
 		self._update = None
+		self._start_game = start_game
 		self._dirty = True
+		self._next_ready = True
 		self._last_moves = []
 
-		# Start Game Loop
 		if start_game:
+			# Start Game Loop
 			_create_thread(self._start_game_loop)
 
-		# Start Game Viewer
-		self._viewer = GeneralsViewer()
-		self._viewer.mainViewerLoop()
+			# Start Game Viewer
+			self._viewer = GeneralsViewer()
+			_create_thread(self._viewer.mainViewerLoop)
 
 	def _start_learn_loop(self):
 		n = 0
@@ -67,13 +69,15 @@ class GeneralsBot(object):
 				if 'reward' not in last_move:
 					continue
 				exper.append(last_move['input'])
-				isTerminal = 'terminal' in last_move
-				preds.append({
+				npred = {
 					'pred': last_move['pred'],
 					'reward': last_move['reward'],
 					'pidx': last_move['pidx'],
-					'terminal': isTerminal,
-					})
+					}
+				isTerminal = 'terminal' in last_move
+				if isTerminal:
+					npred['terminal'] = last_move['terminal']
+				preds.append(npred)
 
 			print "Dumping experiences..."
 			if not os.path.exists('./experiences'):
@@ -89,11 +93,13 @@ class GeneralsBot(object):
 	def _start_game_loop(self):
 		# Create Game
 		# self._game = generals.Generals(BOT_NAME, BOT_NAME, '1v1')
-		self._game = generals.Generals(BOT_NAME, BOT_NAME, 'private', gameid='HyI4d3_rl') # PRIVATE
+		if self._start_game:
+			self._game = generals.Generals(BOT_NAME, BOT_NAME, 'private', gameid='HyI4d3_rl') # PRIVATE
 
 		# Start Game Update Loop
 		self._running = True
-		_create_thread(self._start_update_loop)
+		if self._start_game:
+			_create_thread(self._start_update_loop)
 
 		# Start learner
 		_create_thread(self._start_learn_loop)
@@ -135,7 +141,7 @@ class GeneralsBot(object):
 		if (update['complete']):
 			print("!!!! Game Complete. Result = " + str(update['result']) + " !!!!")
 			lm = self._last_moves[len(self._last_moves)-1]
-			lm['terminal'] = True
+			lm['terminal'] = update['result']
 			self._running = False
 			return
 
@@ -172,6 +178,7 @@ class GeneralsBot(object):
 			if self._update['complete']:
 				break
 			self._make_move()
+			self._next_ready = True
 			#self._turn_end = datetime.datetime.utcnow()
 			#turn_delta = self._turn_end - self._turn_start
 			#till_next = 600.0 - (turn_delta.microseconds / 1000.0)
@@ -191,9 +198,12 @@ class GeneralsBot(object):
 
 		# Make predictions
 		predictions = []
-		with self.model_mtx:
-			with self.graph.as_default():
-				predictions = self.model.predict(input_data)
+		if self._start_game:
+			with self.model_mtx:
+				with self.graph.as_default():
+					predictions = self.model.predict(input_data)
+		else:
+			predictions = numpy.zeros((len(owned_tiles), common.MOVE_COUNT))
 
 		# Best moves
 		best_moves = []
@@ -238,7 +248,7 @@ class GeneralsBot(object):
 
 		move_count = len(best_moves)
 		best_moves = numpy.sort(best_moves, axis=0)
-		best_move_idx = numpy.random.choice(min(move_count, 2))
+		best_move_idx = numpy.random.choice(min(move_count, 5))
 		best_move = all_moves[int(best_moves[int(best_move_idx)][1])]
 
 		ox = best_move['x']
@@ -246,8 +256,9 @@ class GeneralsBot(object):
 		nx = best_move['nx']
 		ny = best_move['ny']
 		is_50 = best_move['is_50']
-		print "Moving", ox, oy, nx, ny, is_50
-		self._place_move(oy, ox, ny, nx, is_50)
+		if self._start_game:
+			print "Moving", ox, oy, nx, ny, is_50
+			self._place_move(oy, ox, ny, nx, is_50)
 
 		# Update prediction with actual outcome
 		with self.data_mtx:
@@ -255,15 +266,15 @@ class GeneralsBot(object):
 			if len(self._last_moves) > 0:
 				lmov = self._last_moves[len(self._last_moves)-1]
 				prodChange = currProd - self._last_production
-				print "Production:", currProd, "Reward:", prodChange, "dSS:", self._last_stack_change
-				if prodChange > 0:
-					prodChange += min(self._last_stack_change, 3)
-					print "Adjusted production:", prodChange
+				print "Production:", currProd, "Reward:", prodChange#, "dSS:", self._last_stack_change
+				#
+				#if prodChange > 0:
+				#	prodChange += min(self._last_stack_change, 3)
+				#	print "Adjusted production:", prodChange
 
-				print "Prediction:"
-				print lmov['pred']
+				# print "Prediction:"
+				# print lmov['pred']
 
-				lmov['pred'][lmov['pidx']] = prodChange + common.DISCOUNT_FACTOR * lmov['pred'][lmov['pidx']]
 				lmov['reward'] = prodChange
 
 			self._last_production = currProd
@@ -309,7 +320,7 @@ class GeneralsBot(object):
 				if tile != self._pi:
 					continue
 				elif pos in self._update['cities']:
-					total += 50
+					total += 25
 				else:
 					total += 10
 		return total
@@ -324,4 +335,7 @@ def _create_thread(f):
 ######################### Main #########################
 
 # Start Bot
-GeneralsBot(True)
+if __name__ == "__main__":
+	GeneralsBot(True)
+	while True:
+		time.sleep(1)

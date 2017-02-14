@@ -24,9 +24,13 @@ PLAYER_ID=$2
 generals-replay game \
   --input ./matches/$REPLAY_NAME \
   --output ./matches_json/${REPLAY_ID}_${PLAYER_ID}.json \
-  --player $PLAYER_ID
+  --player $PLAYER_ID \
+  --normalize 20 \
+  --indent
 
 if [ -n "$3" ]; then
   gifmaker ./matches/$REPLAY_NAME $PLAYER_ID
   google-chrome-stable ./matches/${REPLAY_ID}.gif
 fi
+
+./replay_conv.bash ./matches_json/${REPLAY_ID}_${PLAYER_ID}.json

@@ -1,8 +1,49 @@
 import common
 import numpy
 import client.generals as generals
+import math
 
 MAP_SIZE = common.MAP_SIZE
+
+# Convert a replay step to an update
+def replay_to_update(step):
+	update = {}
+	cells = step['cells']
+	map_size = int(math.sqrt(len(cells)))
+	update['rows'] = map_size
+	update['cols'] = map_size
+	update['player_index'] = 0
+	update['complete'] = False
+	tile_grid = update['tile_grid'] = numpy.zeros((map_size, map_size))
+	army_grid = update['army_grid'] = numpy.zeros((map_size, map_size))
+	generalsa = update['generals'] = []
+	cities = update['cities'] = []
+	for idx, cell in enumerate(cells):
+		row = int(idx / map_size)
+		col = int(idx % map_size)
+
+		faction = cell['faction'] if 'faction' in cell else 0
+		ctype = cell['type'] if 'type' in cell else 0
+		population = cell['population'] if 'population' in cell else 0
+
+		army_grid[row][col] = population
+
+		pos_tup = (row,col)
+		tile_typ = 0
+		if ctype is 3:
+			generalsa.append(pos_tup)
+		elif ctype is 1:
+			cities.append(pos_tup)
+		elif ctype is 2:
+			tile_typ = generals.MOUNTAIN
+		elif ctype is 4:
+			tile_typ = generals.FOG
+
+		if tile_typ != 0:
+			tile_grid[row][col] = tile_typ
+		else:
+			tile_grid[row][col] = 0 if faction is 1 else 1
+	return update
 
 # Build the neural net game view
 def build_game_view(update):
